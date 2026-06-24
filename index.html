@@ -1,0 +1,549 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <title>경향로직스 라벨지 재고관리</title>
+
+    <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+        font-family: "Malgun Gothic", sans-serif;
+      }
+
+      body {
+        background: #f3f6fa;
+      }
+
+      header {
+        background: #9acd32;
+        color: white;
+        height: 75px;
+        display: flex;
+        align-items: center;
+        padding: 0 25px;
+        box-shadow: 0 3px 8px rgba(0, 0, 0, 0.15);
+      }
+
+      .logo {
+        width: 45px;
+        height: 45px;
+        margin-right: 15px;
+      }
+
+      header h1 {
+        font-size: 28px;
+        font-weight: bold;
+      }
+
+      .container {
+        width: 95%;
+        margin: 25px auto;
+      }
+
+      .row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+        margin-bottom: 20px;
+      }
+
+      .card {
+        background: white;
+        border-radius: 15px;
+        padding: 20px;
+        box-shadow: 0 3px 10px rgba(0, 0, 0, 0.12);
+      }
+
+      .card h2 {
+        color: #444;
+        margin-bottom: 15px;
+      }
+
+      input[type="text"] {
+        width: 100%;
+        padding: 12px;
+        border: 1px solid #ccc;
+        border-radius: 8px;
+        font-size: 16px;
+      }
+
+      input[type="file"] {
+        width: 100%;
+        padding: 8px;
+      }
+
+      button {
+        background: #8bc34a;
+        color: white;
+        border: none;
+        padding: 12px 20px;
+        border-radius: 8px;
+        cursor: pointer;
+        margin-top: 10px;
+        font-size: 15px;
+      }
+
+      button:hover {
+        background: #74b32f;
+      }
+
+      .summary {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 15px;
+        margin-bottom: 20px;
+      }
+
+      .summaryCard {
+        background: white;
+        border-radius: 15px;
+        padding: 20px;
+        text-align: center;
+        box-shadow: 0 3px 10px rgba(0, 0, 0, 0.12);
+      }
+
+      .summaryCard h3 {
+        font-size: 15px;
+        color: #666;
+      }
+
+      .summaryCard span {
+        display: block;
+        font-size: 34px;
+        font-weight: bold;
+        margin-top: 15px;
+        color: #8bc34a;
+      }
+
+      .alertBox {
+        height: 350px;
+        overflow: auto;
+      }
+
+      .alertItem {
+        padding: 12px;
+        border-left: 5px solid red;
+        background: #fff6f6;
+        margin-bottom: 10px;
+        border-radius: 8px;
+      }
+
+      canvas {
+        max-height: 350px;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        background: white;
+        box-shadow: 0 3px 10px rgba(0, 0, 0, 0.12);
+      }
+
+      th {
+        background: #8bc34a;
+        color: white;
+        padding: 12px;
+      }
+
+      td {
+        padding: 10px;
+        border-bottom: 1px solid #eee;
+        text-align: center;
+      }
+
+      .status-normal {
+        color: #28a745;
+        font-weight: bold;
+      }
+
+      .status-order {
+        color: red;
+        font-weight: bold;
+      }
+
+      .status-unused {
+        color: #888;
+        font-weight: bold;
+      }
+
+      @media (max-width: 900px) {
+        .row {
+          grid-template-columns: 1fr;
+        }
+
+        .summary {
+          grid-template-columns: 1fr 1fr;
+        }
+      }
+    </style>
+  </head>
+
+  <body>
+    <header>
+      <svg class="logo" viewBox="0 0 64 64">
+        <ellipse cx="32" cy="32" rx="25" ry="18" fill="white" />
+        <ellipse cx="32" cy="32" rx="10" ry="8" fill="#9ACD32" />
+        <rect x="47" y="20" width="6" height="24" rx="2" fill="white" />
+      </svg>
+
+      <h1>경향로직스 라벨지 재고관리</h1>
+    </header>
+
+    <div class="container">
+      <div class="summary">
+        <div class="summaryCard">
+          <h3>전체 품목</h3>
+          <span id="totalItem">0</span>
+        </div>
+
+        <div class="summaryCard">
+          <h3>발주 필요</h3>
+          <span id="needOrder">0</span>
+        </div>
+
+        <div class="summaryCard">
+          <h3>정상 품목</h3>
+          <span id="normalItem">0</span>
+        </div>
+
+        <div class="summaryCard">
+          <h3>미사용</h3>
+          <span id="unusedItem">0</span>
+        </div>
+      </div>
+
+      <!-- ========================= -->
+      <!-- 검색 / 업로드 -->
+      <!-- ========================= -->
+
+      <div class="row">
+        <div class="card">
+          <h2>🔍 품목 검색</h2>
+
+          <input
+            type="text"
+            id="searchInput"
+            placeholder="품번 또는 규격을 입력하세요..."
+            onkeyup="searchTable()"
+          />
+        </div>
+
+        <div class="card">
+          <h2>📂 엑셀 업로드</h2>
+
+          <input type="file" id="excelFile" accept=".xlsx,.xls" />
+
+          <button onclick="loadExcel()">엑셀 불러오기</button>
+        </div>
+      </div>
+
+      <!-- ========================= -->
+      <!-- 발주필요 / 그래프 -->
+      <!-- ========================= -->
+
+      <div class="row">
+        <div class="card">
+          <h2>🚨 발주 필요 품목</h2>
+
+          <div id="alertList" class="alertBox">
+            <div style="color: #888; padding: 20px; text-align: center">
+              엑셀을 업로드하면<br />
+              발주가 필요한 품목이 표시됩니다.
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>📊 재고 현황</h2>
+
+          <canvas id="statusChart"></canvas>
+        </div>
+      </div>
+
+      <!-- ========================= -->
+      <!-- 재고 리스트 -->
+      <!-- ========================= -->
+
+      <div class="card">
+        <h2 style="margin-bottom: 15px">📋 재고 현황</h2>
+
+        <div style="overflow: auto">
+          <table id="inventoryTable">
+            <thead>
+              <tr>
+                <th>품번</th>
+                <th>규격</th>
+                <th>현재고</th>
+                <th>안전재고</th>
+                <th>권장발주</th>
+                <th>상태</th>
+              </tr>
+            </thead>
+
+            <tbody id="tableBody">
+              <tr>
+                <td colspan="6" style="padding: 40px; color: #888">
+                  엑셀 파일을 업로드해주세요.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      let inventory = [];
+
+      let chart;
+
+      const colors = {
+        normal: "#4CAF50",
+        order: "#F44336",
+        unused: "#9E9E9E",
+      };
+
+      function loadExcel() {
+        const file = document.getElementById("excelFile").files[0];
+
+        if (!file) {
+          alert("엑셀 파일을 선택해주세요.");
+          return;
+        }
+
+        const reader = new FileReader();
+
+        reader.onload = function (e) {
+          const data = new Uint8Array(e.target.result);
+
+          const workbook = XLSX.read(data, { type: "array" });
+
+          const sheet = workbook.Sheets[workbook.SheetNames[0]];
+
+          const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+
+          inventory = [];
+
+          for (let i = 1; i < rows.length; i++) {
+            const r = rows[i];
+
+            if (!r || r.length === 0) continue;
+
+            const item = {
+              code: r[0] || "",
+              spec: r[1] || "",
+              stock: Number(r[7]) || 0,
+              safety: Number(r[19]) || 0,
+              orderQty: Number(r[20]) || 0,
+            };
+
+            inventory.push(item);
+          }
+
+          renderTable(inventory);
+          updateDashboard();
+        };
+
+        reader.readAsArrayBuffer(file);
+      }
+
+      function renderTable(list) {
+        const tbody = document.getElementById("tableBody");
+
+        tbody.innerHTML = "";
+
+        list.forEach((item) => {
+          let status = "";
+          let cls = "";
+
+          if (item.safety <= 0) {
+            status = "미사용";
+            cls = "status-unused";
+          } else if (item.stock <= item.safety) {
+            status = "발주 필요";
+            cls = "status-order";
+          } else {
+            status = "정상";
+            cls = "status-normal";
+          }
+
+          tbody.innerHTML += `
+
+        <tr>
+
+        <td>${item.code}</td>
+
+        <td>${item.spec}</td>
+
+        <td>${item.stock}</td>
+
+        <td>${item.safety}</td>
+
+        <td>${item.orderQty}</td>
+
+        <td class="${cls}">${status}</td>
+
+        </tr>
+
+        `;
+        });
+      }
+
+      function updateDashboard() {
+        let normal = 0;
+        let order = 0;
+        let unused = 0;
+
+        const alertList = document.getElementById("alertList");
+        alertList.innerHTML = "";
+
+        inventory.forEach((item) => {
+          if (item.safety <= 0) {
+            unused++;
+          } else if (item.stock <= item.safety) {
+            order++;
+
+            alertList.innerHTML += `
+                <div class="alertItem">
+                    <b>${item.spec}</b><br>
+                    현재고 : ${item.stock}<br>
+                    안전재고 : ${item.safety}<br>
+                    권장발주 : ${item.orderQty}
+                </div>
+            `;
+          } else {
+            normal++;
+          }
+        });
+
+        if (order === 0) {
+          alertList.innerHTML = `
+        <div style="
+            text-align:center;
+            padding:50px;
+            color:#4CAF50;
+            font-size:18px;
+        ">
+        ✅ 발주가 필요한 품목이 없습니다.
+        </div>
+        `;
+        }
+
+        document.getElementById("totalItem").innerText = inventory.length;
+        document.getElementById("needOrder").innerText = order;
+        document.getElementById("normalItem").innerText = normal;
+        document.getElementById("unusedItem").innerText = unused;
+
+        drawChart(normal, order, unused);
+      }
+
+      function drawChart(normal, order, unused) {
+        if (chart) {
+          chart.destroy();
+        }
+
+        const ctx = document.getElementById("statusChart").getContext("2d");
+
+        chart = new Chart(ctx, {
+          type: "doughnut",
+
+          data: {
+            labels: ["정상", "발주 필요", "미사용"],
+
+            datasets: [
+              {
+                data: [normal, order, unused],
+
+                backgroundColor: ["#4CAF50", "#F44336", "#9E9E9E"],
+
+                borderWidth: 0,
+              },
+            ],
+          },
+
+          options: {
+            responsive: true,
+
+            plugins: {
+              legend: {
+                position: "bottom",
+              },
+            },
+
+            cutout: "65%",
+          },
+        });
+      }
+
+      function searchTable() {
+        const keyword = document
+          .getElementById("searchInput")
+          .value.toLowerCase()
+          .trim();
+
+        if (keyword === "") {
+          renderTable(inventory);
+          return;
+        }
+
+        const result = inventory.filter((item) => {
+          return (
+            String(item.code).toLowerCase().includes(keyword) ||
+            String(item.spec).toLowerCase().includes(keyword)
+          );
+        });
+
+        renderTable(result);
+      }
+
+      document
+        .getElementById("searchInput")
+        .addEventListener("keypress", function (e) {
+          if (e.key === "Enter") {
+            searchTable();
+          }
+        });
+
+      window.onload = function () {
+        const ctx = document.getElementById("statusChart").getContext("2d");
+
+        chart = new Chart(ctx, {
+          type: "doughnut",
+
+          data: {
+            labels: ["정상", "발주 필요", "미사용"],
+
+            datasets: [
+              {
+                data: [0, 0, 0],
+
+                backgroundColor: ["#4CAF50", "#F44336", "#9E9E9E"],
+
+                borderWidth: 0,
+              },
+            ],
+          },
+
+          options: {
+            responsive: true,
+
+            plugins: {
+              legend: {
+                position: "bottom",
+              },
+            },
+
+            cutout: "65%",
+          },
+        });
+      };
+    </script>
+  </body>
+</html>
