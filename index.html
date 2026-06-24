@@ -1,0 +1,161 @@
+
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>경향로직스 라벨지 재고관리 대시보드</title>
+
+<script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+
+<style>
+body{font-family:Arial,sans-serif;background:#f4f6f9;margin:20px}
+.card{background:#fff;padding:15px;border-radius:10px;margin-bottom:15px;box-shadow:0 2px 5px rgba(0,0,0,.1)}
+table{width:100%;border-collapse:collapse}
+th,td{border:1px solid #ddd;padding:8px;text-align:left}
+th{background:#1f4e79;color:#fff}
+.danger{background:#ffd9d9}
+.warn{background:#fff3cd}
+input[type=text]{padding:8px;width:300px}
+.badge{display:inline-block;padding:5px 10px;border-radius:5px;background:#1f4e79;color:white}
+</style>
+</head>
+<body>
+
+<h1>경향로직스 라벨지 재고관리</h1>
+
+<div class="card">
+<h3>엑셀 업로드</h3>
+<input type="file" id="excelFile" accept=".xlsx,.xls">
+<p>라벨지 주문관리 엑셀을 업로드하면 자동 분석됩니다.</p>
+</div>
+
+<div class="card">
+<span class="badge" id="summary">데이터 없음</span>
+<br><br>
+<input type="text" id="search" placeholder="규격 검색">
+</div>
+
+<div class="card">
+<h3>⚠ 발주 필요 품목</h3>
+<ul id="alerts"></ul>
+</div>
+
+<div class="card">
+<table>
+<thead>
+<tr>
+<th>규격</th>
+<th>현재고</th>
+<th>안전재고</th>
+<th>상태</th>
+</tr>
+</thead>
+<tbody id="tbody"></tbody>
+</table>
+</div>
+
+<script>
+
+let inventory=[];
+
+function render(){
+
+ const q=document.getElementById('search').value.toLowerCase();
+ const tbody=document.getElementById('tbody');
+ const alerts=document.getElementById('alerts');
+
+ tbody.innerHTML='';
+ alerts.innerHTML='';
+
+ let lowCount=0;
+
+ inventory
+ .filter(x=>x.spec.toLowerCase().includes(q))
+ .forEach(item=>{
+
+    let cls='';
+    let status='정상';
+
+    if(item.safetyNum>0 && item.stock<=item.safetyNum){
+        cls='danger';
+        status='발주 필요';
+        lowCount++;
+
+        const li=document.createElement('li');
+        li.textContent=`${item.spec} (현재고:${item.stock}, 안전재고:${item.safety})`;
+        alerts.appendChild(li);
+
+    }else if(item.safetyNum>0 && item.stock<=item.safetyNum*1.5){
+        cls='warn';
+        status='주의';
+    }
+
+    const tr=document.createElement('tr');
+    tr.className=cls;
+
+    tr.innerHTML=`
+    <td>${item.spec}</td>
+    <td>${item.stock}</td>
+    <td>${item.safety}</td>
+    <td>${status}</td>
+    `;
+
+    tbody.appendChild(tr);
+ });
+
+ document.getElementById('summary').innerText =
+   `전체 ${inventory.length}건 / 발주 필요 ${lowCount}건`;
+}
+
+document.getElementById('search').addEventListener('input',render);
+
+document.getElementById('excelFile').addEventListener('change',function(e){
+
+ const file=e.target.files[0];
+ if(!file) return;
+
+ const reader=new FileReader();
+
+ reader.onload=function(evt){
+
+   const data=new Uint8Array(evt.target.result);
+   const wb=XLSX.read(data,{type:'array'});
+   const ws=wb.Sheets[wb.SheetNames[0]];
+
+   const rows=XLSX.utils.sheet_to_json(ws,{header:1});
+
+   inventory=[];
+
+   for(let i=0;i<rows.length;i++){
+
+      const r=rows[i];
+      if(!r) continue;
+
+      const spec = (r[1]||'').toString().trim();     // B열
+      const stock = Number(r[7]||0);                // H열
+      const safety = (r[19]||'').toString();        // T열
+
+      if(!spec) continue;
+
+      const m=safety.match(/(\d+)/);
+      const safetyNum=m ? Number(m[1]) : 0;
+
+      inventory.push({
+         spec,
+         stock,
+         safety,
+         safetyNum
+      });
+   }
+
+   render();
+ };
+
+ reader.readAsArrayBuffer(file);
+});
+
+</script>
+
+</body>
+</html>
